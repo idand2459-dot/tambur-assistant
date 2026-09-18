@@ -5,6 +5,9 @@
 import { clearChat } from '../data/conversations-repo.js';
 import { botMessages } from './messages.js';
 
+// Defensive cap on customer input length (SPEC §8 "truncate overly long inputs").
+const MAX_INPUT_CHARS = 1000;
+
 /** /start — greet and clear this chat's memory (SPEC §6). */
 export async function handleStart(ctx, { db }) {
   clearChat(db, ctx.chat.id);
@@ -25,7 +28,8 @@ export async function handleText(ctx, { llmService, rateLimiter, now = () => Dat
     if (notify) await ctx.reply(botMessages.throttle);
     return;
   }
-  const reply = await llmService.handleUserMessage(chatId, ctx.message.text);
+  const text = ctx.message.text.slice(0, MAX_INPUT_CHARS);
+  const reply = await llmService.handleUserMessage(chatId, text);
   await ctx.reply(reply);
 }
 

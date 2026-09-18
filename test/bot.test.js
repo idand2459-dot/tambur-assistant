@@ -77,6 +77,14 @@ test('handleText sends the throttle notice once and does not call the LLM', asyn
 
 // --- non-text + commands --------------------------------------------------
 
+test('handleText truncates overly long input before the LLM (SPEC §8)', async () => {
+  const llmService = stubLlm();
+  const rateLimiter = createRateLimiter(2000);
+  await handleText(fakeCtx(8, 'א'.repeat(5000)), { llmService, rateLimiter, now: () => 0 });
+  assert.equal(llmService.calls.length, 1);
+  assert.ok(llmService.calls[0].text.length <= 1000);
+});
+
 test('handleNonText replies with the text-only message', async () => {
   const ctx = fakeCtx(9);
   await handleNonText(ctx);
@@ -91,6 +99,16 @@ test('handleStart clears the chat history and greets', async () => {
   const remaining = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE chat_id = ?').get(5).n;
   assert.equal(remaining, 0);
   assert.deepEqual(ctx.replies, [botMessages.welcome]);
+  db.close();
+});
+
+test('handleStart clears only the target chat, not other chats (SPEC §6)', async () => {
+  const db = openDatabase(':memory:');
+  addMessage(db, 5, 'user', 'של צ׳אט 5', Date.now());
+  addMessage(db, 6, 'user', 'של צ׳אט 6', Date.now());
+  await handleStart(fakeCtx(5, '/start'), { db });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE chat_id = ?').get(5).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE chat_id = ?').get(6).n, 1);
   db.close();
 });
 

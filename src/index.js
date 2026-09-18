@@ -19,17 +19,22 @@ function main() {
     process.exit(1);
   }
 
-  const db = openDatabase(config.dbPath);
-  const products = countProducts(db);
-  if (products === 0) {
-    console.warn('[startup] WARNING: the products table is empty — run `npm run seed`. The bot will find no products.');
+  let bot;
+  try {
+    const db = openDatabase(config.dbPath);
+    const products = countProducts(db);
+    if (products === 0) {
+      console.warn('[startup] WARNING: the products table is empty — run `npm run seed`. The bot will find no products.');
+    }
+    const gemini = createGeminiClient(config);
+    const llmService = createLlmService({ db, generate: gemini.generate });
+    bot = createBot({ config, db, llmService });
+    console.log(`[startup] Tambur Assistant starting. model=${config.geminiModel} products=${products}`);
+  } catch (err) {
+    console.error(`[startup] initialization failed: ${err?.message ?? err}`);
+    process.exit(1);
   }
 
-  const gemini = createGeminiClient(config);
-  const llmService = createLlmService({ db, generate: gemini.generate });
-  const bot = createBot({ config, db, llmService });
-
-  console.log(`[startup] Tambur Assistant starting. model=${config.geminiModel} products=${products}`);
   bot.start({ onStart: (me) => console.log(`[startup] connected as @${me.username}`) }).catch((err) => {
     console.error(`[startup] failed to start bot: ${err?.message ?? err}`);
     process.exit(1);
