@@ -1,0 +1,22 @@
+{
+  "name": "tambur-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram customer-service bot for Technic Tambur (Hebrew). Answers only from a real product database via Gemini tool calling — never invents a product, price, or stock status.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.0",
+    "grammy": "^1.46.0"
+  }
+}
