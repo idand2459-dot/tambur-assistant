@@ -40,8 +40,7 @@ export function openDatabase(dbPath) {
     mkdirSync(dirname(dbPath), { recursive: true });
   }
   const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL'); // better read/write concurrency for a long-running bot
   db.exec(SCHEMA);
   return db;
 }

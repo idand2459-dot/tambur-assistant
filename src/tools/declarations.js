@@ -1,8 +1,10 @@
 // Gemini function declarations for the three tools (SPEC §4). These are what the model
 // reads to decide when and how to call a tool. The descriptions matter — they are the
 // model's only guidance — so keep them accurate and aligned with SPEC §4 and §5.
-
-import { Type } from '@google/genai';
+//
+// Types are the plain Gemini Schema type strings ('OBJECT'/'STRING'/'INTEGER'), which are
+// exactly the values of the SDK's `Type` enum. Using the literals keeps the tools layer
+// free of a Gemini SDK import (AGENTS §1: no Gemini in the tools/data layers).
 
 export const toolDeclarations = [
   {
@@ -14,21 +16,21 @@ export const toolDeclarations = [
       'name, category, price (ILS) and stock status. Returns an empty list when nothing ' +
       'matches — never invent a product, price, or stock status.',
     parameters: {
-      type: Type.OBJECT,
+      type: 'OBJECT',
       properties: {
         query: {
-          type: Type.STRING,
+          type: 'STRING',
           description:
             "The product the customer is describing, in their own words (usually Hebrew). " +
             "Examples: 'צבע קיר לבן', 'מברשת 5 ס״מ'.",
         },
         category: {
-          type: Type.STRING,
+          type: 'STRING',
           description:
             "Optional. Restrict results to one category if known, e.g. 'צבעים', 'מברשות'.",
         },
         limit: {
-          type: Type.INTEGER,
+          type: 'INTEGER',
           description: 'Optional. Max products to return (default 5, max 10).',
         },
       },
@@ -43,10 +45,10 @@ export const toolDeclarations = [
       'you know its id from a previous search_products result. Returns { found: false } ' +
       'if the id is unknown.',
     parameters: {
-      type: Type.OBJECT,
+      type: 'OBJECT',
       properties: {
         product_id: {
-          type: Type.INTEGER,
+          type: 'INTEGER',
           description: 'The numeric id of the product, from a previous search_products result.',
         },
       },
@@ -60,10 +62,10 @@ export const toolDeclarations = [
       'Call this when the customer asks when the store is open, where it is located, or ' +
       'how to contact it.',
     parameters: {
-      type: Type.OBJECT,
+      type: 'OBJECT',
       properties: {
         topic: {
-          type: Type.STRING,
+          type: 'STRING',
           description:
             "Optional. One of 'hours', 'address', 'phone', 'general'. Omit to return all.",
         },

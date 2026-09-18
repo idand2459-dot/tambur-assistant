@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -41,11 +42,28 @@ test('conversations table has the (chat_id, created_at) index', () => {
   db.close();
 });
 
-test('openDatabase is idempotent (safe to call on an existing db)', () => {
-  const db = memDb();
-  // Running the schema again must not throw.
-  assert.doesNotThrow(() => openDatabase(':memory:'));
-  db.close();
+test('openDatabase is idempotent on an existing, populated database file', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tambur-'));
+  const path = join(dir, 'idem.db');
+  try {
+    // First open creates the schema and inserts a row.
+    const db1 = openDatabase(path);
+    db1
+      .prepare('INSERT INTO products (name, category, price, in_stock) VALUES (?, ?, ?, ?)')
+      .run('בדיקה', 'בדיקה', 1, 1);
+    db1.close();
+
+    // Reopening the SAME file re-runs the schema against existing tables + data:
+    // it must not throw, and it must not drop the existing row.
+    let db2;
+    assert.doesNotThrow(() => {
+      db2 = openDatabase(path);
+    });
+    assert.equal(db2.prepare('SELECT COUNT(*) AS n FROM products').get().n, 1);
+    db2.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // --- seeding --------------------------------------------------------------

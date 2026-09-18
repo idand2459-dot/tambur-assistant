@@ -43,9 +43,11 @@ Typical questions:
 - The official package is **`@google/genai`** (class `GoogleGenAI`). This is the unified
   *Google Gen AI SDK*. Do **not** use the older, deprecated `@google/generative-ai`
   (`GoogleGenerativeAI`) — most old tutorials show that one.
-- **Node version:** this project targets Node **22 LTS**, so we install the **current**
-  `@google/genai` (no pinning to an old release). `@google/genai` 3.0.0+ requires Node 22+,
-  which we satisfy. `package.json` declares `engines.node >=22`.
+- **Node version:** this project targets Node **22 LTS** (the dev machine runs Node 24,
+  which also satisfies `>=22`). We install the **current** `@google/genai` from npm — at
+  install time that is **2.23.0** (`npm view @google/genai version` → `latest`). There is no
+  3.x release yet; the SDK docs note only that a *future* 3.0.0+ would require Node 22+,
+  which we already satisfy. `package.json` declares `engines.node >=22`.
 - Core API shape we rely on:
   - `const ai = new GoogleGenAI({ apiKey })`
   - Single-shot: `ai.models.generateContent({ model, contents, config })`
@@ -334,6 +336,10 @@ if that risks PII — keep it operational. Fields:
 | `created_at`| INTEGER| Unix ms, NOT NULL                        |
 
 Index on `(chat_id, created_at)` for fast recent-history lookups and pruning.
+
+The database is opened in SQLite **WAL** journal mode (in `src/data/db.js`) for better
+read/write concurrency while the bot is running. WAL sidecar files (`*.db-wal`, `*.db-shm`)
+are git-ignored.
 
 ### 9.3 Seeding from CSV
 

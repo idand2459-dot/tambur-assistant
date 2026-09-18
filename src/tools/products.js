@@ -1,5 +1,8 @@
-// Product tools (SPEC §4.1, §4.2). Pure functions over a db handle — no Telegram, no LLM.
-// These are the ONLY source of product facts the model is allowed to use.
+// Product tools (SPEC §4.1, §4.2). No Telegram, no LLM, and no SQL — all database access
+// goes through the data-layer repository (AGENTS §1). These are the ONLY source of product
+// facts the model is allowed to use.
+
+import { getAllProducts, getProductsByCategory, getProductById } from '../data/products-repo.js';
 
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
@@ -47,10 +50,8 @@ export function searchProducts(db, { query = '', category, limit = DEFAULT_LIMIT
 
   const hasCategory = category !== undefined && String(category).trim() !== '';
   const rows = hasCategory
-    ? db
-        .prepare('SELECT id, name, category, price, in_stock FROM products WHERE category = ?')
-        .all(String(category).trim())
-    : db.prepare('SELECT id, name, category, price, in_stock FROM products').all();
+    ? getProductsByCategory(db, String(category).trim())
+    : getAllProducts(db);
 
   const haystackOf = (row) => `${row.name} ${row.category}`.toLowerCase();
 
@@ -88,9 +89,6 @@ export function getProductDetails(db, { product_id } = {}) {
   const id = Number(product_id);
   if (!Number.isInteger(id)) return { found: false };
 
-  const row = db
-    .prepare('SELECT id, name, category, price, in_stock FROM products WHERE id = ?')
-    .get(id);
-
+  const row = getProductById(db, id);
   return row ? { found: true, product: toResult(row) } : { found: false };
 }
