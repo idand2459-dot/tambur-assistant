@@ -4,7 +4,7 @@
 // brackets with the store's real details before launch.
 
 export const storeInfo = {
-  hours: '8:00-19:00',
+  hours: 'א׳–ה׳ 08:00–19:00, ו׳ 08:00–14:00, שבת סגור',
   address: 'בר כוכבא 52, פתח תקווה',
   phone: '03-9315750',
   general: 'חנות חומרי בניין וצבע שכונתית בפתח תקווה',

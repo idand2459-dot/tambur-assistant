@@ -64,12 +64,21 @@ export function createLlmService({
       reply = apologyMessage(); // SPEC §8: friendly fallback, never crash
     }
 
-    // --- memory: persist this turn (user message + the reply we actually sent) ---
-    const t = now();
-    addMessage(db, chatId, 'user', userText, t);
-    addMessage(db, chatId, 'model', reply, t + 1);
-
-    log(turnLog); // SPEC §8.2: exactly one structured line per turn
+    // --- memory: persist this turn (user + reply). Best-effort: a persistence or logging
+    //     failure must not crash the turn or drop the reply (SPEC §8). ---
+    try {
+      const t = now();
+      addMessage(db, chatId, 'user', userText, t);
+      addMessage(db, chatId, 'model', reply, t + 1);
+    } catch (persistErr) {
+      turnLog.ok = false;
+      turnLog.error = turnLog.error ?? shortError(persistErr);
+    }
+    try {
+      log(turnLog); // SPEC §8.2: exactly one structured line per turn
+    } catch {
+      // never let logging break a reply
+    }
     return reply;
   }
 
@@ -77,11 +86,15 @@ export function createLlmService({
   async function runToolLoop(contents, turnLog) {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const startedAt = now();
-      const response = await withTimeout(
-        generate({ contents, systemInstruction: systemPrompt, tools: geminiTools, toolConfig }),
-        timeoutMs,
-      );
-      turnLog.llm_ms += now() - startedAt;
+      let response;
+      try {
+        response = await withTimeout(
+          generate({ contents, systemInstruction: systemPrompt, tools: geminiTools, toolConfig }),
+          timeoutMs,
+        );
+      } finally {
+        turnLog.llm_ms += now() - startedAt; // count latency even on throw/timeout (SPEC §8.2)
+      }
 
       const calls = response.functionCalls ?? [];
       if (calls.length === 0) {

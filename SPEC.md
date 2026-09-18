@@ -56,8 +56,10 @@ Typical questions:
   - Read tool calls from `response.functionCalls`; read text from `response.text`
   - Multi-turn + feeding tool results back: use the chat module
     (`ai.chats.create({ model, config, history })` → `chat.sendMessage(...)`).
-- Model id is configurable via env (`GEMINI_MODEL`), default a current *flash* model
-  (e.g. `gemini-2.5-flash`). Confirm the exact current flash id when wiring the LLM layer.
+- Model id is configurable via env (`GEMINI_MODEL`). Default: **`gemini-3.5-flash-lite`**
+  (verified served, free tier 15 requests/minute). The older `gemini-2.5-flash` /
+  `gemini-2.5-flash-lite` are retired for new keys, and `gemini-3.5-flash`'s free tier is
+  only 20 requests/day — see the README for the model/quota rationale.
 
 ---
 
@@ -241,7 +243,7 @@ per-turn logs in §8.2 make that comparison observable).
 |------------------|----------------------------------------|-------------------------|
 | `BOT_TOKEN`      | Telegram bot token (from BotFather)    | `123456:ABC...`         |
 | `GEMINI_API_KEY` | Google Gemini API key                  | `AIza...`               |
-| `GEMINI_MODEL`   | Model id (optional, has default)       | `gemini-2.5-flash`      |
+| `GEMINI_MODEL`   | Model id (optional, has default)       | `gemini-3.5-flash-lite` |
 | `DB_PATH`        | SQLite file path (optional, default)   | `./data/tambur.db`      |
 | `RATE_LIMIT_MS`  | Per-chat throttle window (optional)    | `2000`                  |
 
@@ -258,7 +260,8 @@ per-turn logs in §8.2 make that comparison observable).
 | Situation                     | Behaviour                                                                                   |
 |-------------------------------|--------------------------------------------------------------------------------------------|
 | **LLM API down / error**      | Catch, log server-side, reply in Hebrew: "מצטער, יש כרגע תקלה זמנית. נסו שוב עוד רגע או התקשרו לחנות ל[טלפון]." Never crash the bot. |
-| **LLM timeout**               | Apply a request timeout (e.g. 20s). On timeout, same friendly message as above.            |
+| **LLM timeout**               | Apply a per-call request timeout (20s). On timeout, same friendly message as above.        |
+| **Runaway tool loop**         | At most **5 tool round-trips** per turn (`MAX_TOOL_ROUNDS`). If exceeded, the turn is abandoned and the customer gets the generic apology (guards against an infinite tool/model loop and its cost). |
 | **Tool/DB error**             | Tool returns a structured error to the model; if unrecoverable, bot gives the generic apology + phone. |
 | **Empty DB / no products**    | `search_products` returns `count: 0`; bot says the item wasn't found and suggests calling. Startup logs a warning if the products table is empty. |
 | **Bad user input** (empty, emoji-only, gibberish, non-Hebrew) | Bot asks the customer to rephrase; never errors out. Non-text messages (photos, stickers, voice) get a short "אני יכול לקרוא רק טקסט" reply. |
@@ -466,7 +469,7 @@ short plain-language explanation to Idan** (per AGENTS.md). No feature outside t
 ---
 
 ## 12. Open questions / to confirm before/at build time
-- Exact current Gemini *flash* model id to default `GEMINI_MODEL` to (confirm when wiring
-  Stage 4).
+- ~~Exact current Gemini *flash* model id to default `GEMINI_MODEL` to~~ — resolved:
+  `gemini-3.5-flash-lite` (see §2).
 - Real store hours, address, and phone for `store-info` (Idan provides before launch).
 - Real product data / CSV (sample data used until then).

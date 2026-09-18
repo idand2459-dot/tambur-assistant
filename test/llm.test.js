@@ -143,6 +143,54 @@ test('times out a slow model call and falls back to the apology', async () => {
   assert.equal(reply, apologyMessage());
   assert.equal(log.entries[0].ok, false);
   assert.equal(log.entries[0].error, 'timeout');
+  assert.ok(log.entries[0].llm_ms > 0, 'llm_ms must count the latency of a timed-out call');
+  db.close();
+});
+
+test('a tool that throws mid-turn yields a structured error; the turn still completes', async () => {
+  const realDb = openDatabase(':memory:');
+  // Proxy that makes any products query throw, while conversation-memory queries still work.
+  const db = new Proxy(realDb, {
+    get(target, prop) {
+      if (prop === 'prepare') {
+        return (sql) =>
+          sql.includes('FROM products')
+            ? { all: () => { throw new Error('db boom'); }, get: () => { throw new Error('db boom'); } }
+            : target.prepare(sql);
+      }
+      const v = target[prop];
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+  const log = captureLog();
+  const generate = stubGenerate([
+    { functionCalls: [{ name: 'search_products', args: { query: 'צבע' } }], text: undefined },
+    { functionCalls: [], text: 'סליחה, לא הצלחתי לבדוק כרגע.' },
+  ]);
+  const svc = createLlmService({ db, generate, log });
+
+  const reply = await svc.handleUserMessage(50, 'יש צבע?');
+  assert.match(reply, /סליחה/);
+  assert.match(log.entries[0].tools[0].result, /tool_failed/); // structured error to the model
+  assert.equal(log.entries[0].ok, true); // the turn still completed
+  realDb.close();
+});
+
+test('exceeding the tool-round cap falls back to the apology', async () => {
+  const db = seededDb();
+  const log = captureLog();
+  // Always requests another tool call — never returns text.
+  const generate = async () => ({
+    functionCalls: [{ name: 'search_products', args: { query: 'צבע' } }],
+    text: undefined,
+  });
+  const svc = createLlmService({ db, generate, log });
+
+  const reply = await svc.handleUserMessage(60, 'לולאה אינסופית');
+  assert.equal(reply, apologyMessage());
+  assert.equal(log.entries[0].ok, false);
+  assert.equal(log.entries[0].error, 'tool_loop_exceeded');
+  assert.equal(log.entries[0].tools.length, 5); // capped at MAX_TOOL_ROUNDS
   db.close();
 });
 
