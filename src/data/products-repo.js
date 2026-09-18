@@ -18,3 +18,8 @@ export function getProductsByCategory(db, category) {
 export function getProductById(db, id) {
   return db.prepare(`SELECT ${COLUMNS} FROM products WHERE id = ?`).get(id);
 }
+
+/** Number of products in the catalog (used at startup to warn on an empty DB). */
+export function countProducts(db) {
+  return db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
+}

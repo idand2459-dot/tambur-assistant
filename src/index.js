@@ -1,11 +1,14 @@
-// Entry point.
-//
-// Stage 1: load environment (via dotenv) and validate configuration, failing fast with a
-// clear message if anything required is missing. Later stages wire the database, the LLM
-// layer, and the grammY Telegram bot here.
+// Entry point (SPEC §11 Stage 5). Validate config (fail fast), open and check the DB,
+// wire the LLM and Telegram layers, and start long polling.
 
 import 'dotenv/config';
+
 import { loadConfig } from './config/env.js';
+import { openDatabase } from './data/db.js';
+import { countProducts } from './data/products-repo.js';
+import { createGeminiClient } from './llm/gemini-client.js';
+import { createLlmService } from './llm/service.js';
+import { createBot } from './bot/bot.js';
 
 function main() {
   let config;
@@ -16,10 +19,21 @@ function main() {
     process.exit(1);
   }
 
-  console.log(
-    `[startup] Config OK. model=${config.geminiModel} db=${config.dbPath} ` +
-      `rateLimitMs=${config.rateLimitMs}. (Bot not started yet — Stage 1 skeleton.)`,
-  );
+  const db = openDatabase(config.dbPath);
+  const products = countProducts(db);
+  if (products === 0) {
+    console.warn('[startup] WARNING: the products table is empty — run `npm run seed`. The bot will find no products.');
+  }
+
+  const gemini = createGeminiClient(config);
+  const llmService = createLlmService({ db, generate: gemini.generate });
+  const bot = createBot({ config, db, llmService });
+
+  console.log(`[startup] Tambur Assistant starting. model=${config.geminiModel} products=${products}`);
+  bot.start({ onStart: (me) => console.log(`[startup] connected as @${me.username}`) }).catch((err) => {
+    console.error(`[startup] failed to start bot: ${err?.message ?? err}`);
+    process.exit(1);
+  });
 }
 
 main();
