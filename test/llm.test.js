@@ -255,6 +255,44 @@ test('emits exactly one structured log line per turn with the required fields', 
   db.close();
 });
 
+// --- never-invent a phone number (SPEC §5) -------------------------------
+
+const PHONE_SHAPED = /[+(]?\d[\d\s\-()]{7,}\d/;
+
+test('a professional-advice reply must call get_store_info or contain no phone number', async () => {
+  const db = seededDb();
+  const log = captureLog();
+  // Model deflects to "call us" and states a phone, but never calls get_store_info.
+  const generate = stubGenerate([
+    { functionCalls: [], text: 'לעזרה מקצועית ניתן לחייג אלינו. המספר שלנו הוא 03-9123456.' },
+  ]);
+  const svc = createLlmService({ db, generate, log });
+
+  const reply = await svc.handleUserMessage(70, 'איזה צבע מתאים לאמבטיה עם רטיבות?');
+  const usedStoreInfo = log.entries[0].tools.some((t) => t.name === 'get_store_info');
+  assert.equal(usedStoreInfo, false); // this turn did not call the tool...
+  assert.ok(!PHONE_SHAPED.test(reply), `ungrounded phone must be stripped; got: ${reply}`);
+});
+
+test('a phone-shaped string survives only when get_store_info was called that turn', async () => {
+  const db = seededDb();
+  const log = captureLog();
+
+  // Called get_store_info -> the phone is grounded and kept.
+  const gen1 = stubGenerate([
+    { functionCalls: [{ name: 'get_store_info', args: { topic: 'phone' } }], text: undefined },
+    { functionCalls: [], text: 'אפשר להתקשר אלינו: 03-9315750.' },
+  ]);
+  const r1 = await createLlmService({ db, generate: gen1, log }).handleUserMessage(71, 'מה הטלפון?');
+  assert.match(r1, /03-9315750/);
+
+  // No get_store_info this turn -> any phone-shaped string is stripped.
+  const gen2 = stubGenerate([{ functionCalls: [], text: 'תתקשרו ל-050-1112222 בבקשה.' }]);
+  const r2 = await createLlmService({ db, generate: gen2, log }).handleUserMessage(72, 'משהו');
+  assert.ok(!PHONE_SHAPED.test(r2), `ungrounded phone must be stripped; got: ${r2}`);
+  db.close();
+});
+
 test('truncates long tool payloads in the log', async () => {
   const db = seededDb();
   const log = captureLog();

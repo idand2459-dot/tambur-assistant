@@ -203,7 +203,10 @@ The system prompt (Hebrew) instructs the model to:
    price or stock.
 4. **Suggest calling the store** when: the item isn't found, the customer asks something the
    tools can't answer, or they want to order/pay (out of scope). Provide the store phone
-   (from `get_store_info`).
+   (from `get_store_info`). **Never state a phone number that did not come from a tool** —
+   this includes professional-advice deflections. As a safety net the LLM layer strips any
+   phone-shaped string from a model reply when `get_store_info` was not called that turn (the
+   fixed API-failure apology, which quotes the configured phone, is exempt).
 5. **Stay in scope:** the bot answers about products (existence, price, availability) and
    store info (hours/address/phone). It does not take orders, process payments, give
    professional trade advice it can't ground, or discuss unrelated topics.

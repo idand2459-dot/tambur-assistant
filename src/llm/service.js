@@ -57,6 +57,7 @@ export function createLlmService({
     let reply;
     try {
       reply = await runToolLoop(contents, turnLog);
+      reply = groundPhone(reply, turnLog.tools); // never emit an ungrounded phone (SPEC §5)
       turnLog.ok = true;
     } catch (err) {
       turnLog.ok = false;
@@ -145,6 +146,25 @@ export function createLlmService({
 
 function toContent(message) {
   return { role: message.role, parts: [{ text: message.content }] };
+}
+
+// A phone-shaped run: 9+ digits, allowing spaces/dashes/parens/plus between them.
+const PHONE_SHAPED = /[+(]?\d[\d\s\-()]{7,}\d/g;
+
+/**
+ * Enforce "never invent a phone number" (SPEC §5). If the model's reply states a phone
+ * number but get_store_info was NOT called this turn, that number is ungrounded — strip it.
+ * A real phone only reaches the customer via the tool (or the fixed apology text, which is
+ * set in the catch branch and never routed through here).
+ */
+function groundPhone(reply, toolsUsed) {
+  const groundedByTool = toolsUsed.some((t) => t.name === 'get_store_info');
+  if (groundedByTool) return reply;
+  return reply
+    .replace(PHONE_SHAPED, (m) => (m.replace(/\D/g, '').length >= 9 ? '' : m))
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([.,])/g, '$1')
+    .trim();
 }
 
 /** Reject if `promise` does not settle within `ms` (SPEC §8 timeout). */
