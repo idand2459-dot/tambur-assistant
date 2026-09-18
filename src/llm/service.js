@@ -11,6 +11,7 @@ import {
 } from '../data/conversations-repo.js';
 import { SYSTEM_PROMPT } from './system-prompt.js';
 import { apologyMessage } from './messages.js';
+import { storeInfo } from '../config/store-info.js';
 
 const HISTORY_LIMIT = 10; // messages of context to load (SPEC §6)
 const RETENTION_MS = 24 * 60 * 60 * 1000; // prune messages older than 24h (SPEC §6)
@@ -148,23 +149,47 @@ function toContent(message) {
   return { role: message.role, parts: [{ text: message.content }] };
 }
 
-// A phone-shaped run: 9+ digits, allowing spaces/dashes/parens/plus between them.
-const PHONE_SHAPED = /[+(]?\d[\d\s\-()]{7,}\d/g;
+// A phone-shaped run: 9+ digits with common separators (space . / - ( ) +).
+const PHONE_RUN = /[+(]?\d[\d\s().\/-]{7,}\d/g;
+const CONTACT_GESTURE = /להתקשר|לחייג|חייג|התקשר|תתקשר|טלפון/;
+
+const isPhoneRun = (s) => s.replace(/\D/g, '').length >= 9;
+
+function containsPhone(text) {
+  const matches = text.match(PHONE_RUN);
+  return matches ? matches.some(isPhoneRun) : false;
+}
 
 /**
- * Enforce "never invent a phone number" (SPEC §5). If the model's reply states a phone
- * number but get_store_info was NOT called this turn, that number is ungrounded — strip it.
- * A real phone only reaches the customer via the tool (or the fixed apology text, which is
- * set in the catch branch and never routed through here).
+ * Enforce "never invent a phone number, and always show the real one" (SPEC §5). When the
+ * model's reply was NOT grounded by a get_store_info call this turn:
+ *   - any phone-shaped number is replaced with the store's real number (config), so a
+ *     hallucinated number can never reach the customer; and
+ *   - if the reply directs the customer to call but omits a number, the real number is
+ *     appended — so they always have a way to reach the store.
+ * A reply that neither states nor gestures at a phone is passed through unchanged. The
+ * fixed apology text (set in the catch branch) already quotes the configured phone and is
+ * never routed through here.
  */
 function groundPhone(reply, toolsUsed) {
-  const groundedByTool = toolsUsed.some((t) => t.name === 'get_store_info');
-  if (groundedByTool) return reply;
-  return reply
-    .replace(PHONE_SHAPED, (m) => (m.replace(/\D/g, '').length >= 9 ? '' : m))
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\s+([.,])/g, '$1')
-    .trim();
+  if (toolsUsed.some((t) => t.name === 'get_store_info')) return reply; // grounded by the tool
+
+  const realPhone = storeInfo.phone;
+  let changed = false;
+
+  let out = reply.replace(PHONE_RUN, (m) => {
+    if (!isPhoneRun(m)) return m;
+    changed = true;
+    return realPhone;
+  });
+
+  if (!containsPhone(out) && CONTACT_GESTURE.test(out)) {
+    out = `${out.replace(/[\s.]*$/, '')}. מספר הטלפון שלנו: ${realPhone}.`;
+    changed = true;
+  }
+
+  if (!changed) return reply; // untouched replies pass through unchanged
+  return out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,])/g, '$1').trim();
 }
 
 /** Reject if `promise` does not settle within `ms` (SPEC §8 timeout). */

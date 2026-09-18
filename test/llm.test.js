@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { openDatabase } from '../src/data/db.js';
 import { createLlmService } from '../src/llm/service.js';
 import { apologyMessage } from '../src/llm/messages.js';
+import { storeInfo } from '../src/config/store-info.js';
 
 // --- helpers --------------------------------------------------------------
 
@@ -255,41 +256,61 @@ test('emits exactly one structured log line per turn with the required fields', 
   db.close();
 });
 
-// --- never-invent a phone number (SPEC §5) -------------------------------
+// --- never-invent a phone number, always show the real one (SPEC §5) ------
 
-const PHONE_SHAPED = /[+(]?\d[\d\s\-()]{7,}\d/;
+const REAL = storeInfo.phone; // '03-9315750'
 
-test('a professional-advice reply must call get_store_info or contain no phone number', async () => {
+test('a professional-advice reply with no number gets the real phone appended', async () => {
   const db = seededDb();
   const log = captureLog();
-  // Model deflects to "call us" and states a phone, but never calls get_store_info.
+  // Model deflects to "call us" but does not call get_store_info and gives no number.
   const generate = stubGenerate([
-    { functionCalls: [], text: 'לעזרה מקצועית ניתן לחייג אלינו. המספר שלנו הוא 03-9123456.' },
+    { functionCalls: [], text: 'לעזרה מקצועית בנושא ניתן לחייג אלינו ונשמח לעמוד לרשותכם.' },
   ]);
-  const svc = createLlmService({ db, generate, log });
-
-  const reply = await svc.handleUserMessage(70, 'איזה צבע מתאים לאמבטיה עם רטיבות?');
-  const usedStoreInfo = log.entries[0].tools.some((t) => t.name === 'get_store_info');
-  assert.equal(usedStoreInfo, false); // this turn did not call the tool...
-  assert.ok(!PHONE_SHAPED.test(reply), `ungrounded phone must be stripped; got: ${reply}`);
+  const reply = await createLlmService({ db, generate, log }).handleUserMessage(70, 'צבע לאמבטיה?');
+  assert.equal(log.entries[0].tools.some((t) => t.name === 'get_store_info'), false);
+  assert.match(reply, new RegExp(REAL)); // real phone appended so the customer can reach us
 });
 
-test('a phone-shaped string survives only when get_store_info was called that turn', async () => {
+test('an ungrounded phone number is replaced with the store real number', async () => {
   const db = seededDb();
   const log = captureLog();
+  const generate = stubGenerate([{ functionCalls: [], text: 'תתקשרו ל-050-1112222 בבקשה.' }]);
+  const reply = await createLlmService({ db, generate, log }).handleUserMessage(72, 'משהו');
+  assert.match(reply, new RegExp(REAL));
+  assert.ok(!reply.includes('050-1112222'), `wrong number must be replaced; got: ${reply}`);
+  db.close();
+});
 
-  // Called get_store_info -> the phone is grounded and kept.
-  const gen1 = stubGenerate([
+test('an ungrounded phone in dotted format is also replaced', async () => {
+  const db = seededDb();
+  const log = captureLog();
+  const generate = stubGenerate([{ functionCalls: [], text: 'המספר שלנו הוא 03.931.5750 להתקשרות.' }]);
+  const reply = await createLlmService({ db, generate, log }).handleUserMessage(74, 'מה המספר?');
+  assert.match(reply, new RegExp(REAL));
+  assert.ok(!reply.includes('03.931.5750'), `dotted number must be replaced; got: ${reply}`);
+  db.close();
+});
+
+test('a phone from a get_store_info-grounded reply is kept as-is', async () => {
+  const db = seededDb();
+  const log = captureLog();
+  const gen = stubGenerate([
     { functionCalls: [{ name: 'get_store_info', args: { topic: 'phone' } }], text: undefined },
-    { functionCalls: [], text: 'אפשר להתקשר אלינו: 03-9315750.' },
+    { functionCalls: [], text: `אפשר להתקשר אלינו: ${REAL}.` },
   ]);
-  const r1 = await createLlmService({ db, generate: gen1, log }).handleUserMessage(71, 'מה הטלפון?');
-  assert.match(r1, /03-9315750/);
+  const reply = await createLlmService({ db, generate: gen, log }).handleUserMessage(71, 'מה הטלפון?');
+  assert.match(reply, new RegExp(REAL));
+  db.close();
+});
 
-  // No get_store_info this turn -> any phone-shaped string is stripped.
-  const gen2 = stubGenerate([{ functionCalls: [], text: 'תתקשרו ל-050-1112222 בבקשה.' }]);
-  const r2 = await createLlmService({ db, generate: gen2, log }).handleUserMessage(72, 'משהו');
-  assert.ok(!PHONE_SHAPED.test(r2), `ungrounded phone must be stripped; got: ${r2}`);
+test('a reply with no phone and no contact gesture is passed through unchanged', async () => {
+  const db = seededDb();
+  const log = captureLog();
+  const text = 'יש לנו מבחר צבעים במלאי, נשמח לעזור.';
+  const generate = stubGenerate([{ functionCalls: [], text }]);
+  const reply = await createLlmService({ db, generate, log }).handleUserMessage(73, 'איזה צבעים יש?');
+  assert.equal(reply, text); // untouched
   db.close();
 });
 

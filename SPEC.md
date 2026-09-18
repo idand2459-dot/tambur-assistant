@@ -204,9 +204,14 @@ The system prompt (Hebrew) instructs the model to:
 4. **Suggest calling the store** when: the item isn't found, the customer asks something the
    tools can't answer, or they want to order/pay (out of scope). Provide the store phone
    (from `get_store_info`). **Never state a phone number that did not come from a tool** —
-   this includes professional-advice deflections. As a safety net the LLM layer strips any
-   phone-shaped string from a model reply when `get_store_info` was not called that turn (the
-   fixed API-failure apology, which quotes the configured phone, is exempt).
+   this includes professional-advice deflections, where the model is instructed to call
+   `get_store_info` first. As a safety net, when a model reply was not grounded by a
+   `get_store_info` call that turn, the LLM layer **normalizes** phone numbers: any
+   phone-shaped string is replaced with the store's real number (from config), and if the
+   reply directs the customer to call but omits a number, the real number is appended. So the
+   only phone a customer ever sees is the store's real one, and it appears whenever the reply
+   points them to call. (The fixed API-failure apology already quotes the configured phone
+   and is exempt.)
 5. **Stay in scope:** the bot answers about products (existence, price, availability) and
    store info (hours/address/phone). It does not take orders, process payments, give
    professional trade advice it can't ground, or discuss unrelated topics.
