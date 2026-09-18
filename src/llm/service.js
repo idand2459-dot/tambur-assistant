@@ -88,11 +88,14 @@ export function createLlmService({
         return response.text ?? '';
       }
 
-      // Echo the model's function-call turn, then append one user turn with the results.
-      contents.push({
+      // Echo back the model's ACTUAL content (preserves fields Gemini 3.x requires on the
+      // functionCall parts, notably thought_signature), falling back to a reconstruction
+      // when the response carries no candidate content (e.g. in stubbed unit tests).
+      const modelContent = response.candidates?.[0]?.content ?? {
         role: 'model',
         parts: calls.map((c) => ({ functionCall: { name: c.name, args: c.args ?? {} } })),
-      });
+      };
+      contents.push(modelContent);
 
       const responseParts = [];
       for (const call of calls) {

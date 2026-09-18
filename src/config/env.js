@@ -7,7 +7,7 @@
 const REQUIRED_VARS = ['BOT_TOKEN', 'GEMINI_API_KEY'];
 
 const DEFAULTS = {
-  GEMINI_MODEL: 'gemini-2.5-flash',
+  GEMINI_MODEL: 'gemini-3.5-flash',
   DB_PATH: './data/tambur.db',
   RATE_LIMIT_MS: '2000',
 };

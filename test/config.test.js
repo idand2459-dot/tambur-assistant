@@ -9,7 +9,7 @@ test('loadConfig returns required values and applies defaults', () => {
   const cfg = loadConfig({ ...BASE });
   assert.equal(cfg.botToken, 'token-x');
   assert.equal(cfg.geminiApiKey, 'key-y');
-  assert.equal(cfg.geminiModel, 'gemini-2.5-flash');
+  assert.equal(cfg.geminiModel, 'gemini-3.5-flash');
   assert.equal(cfg.dbPath, './data/tambur.db');
   assert.equal(cfg.rateLimitMs, 2000);
 });
