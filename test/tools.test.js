@@ -62,6 +62,12 @@ test('search_products partial fallback ranks by number of tokens matched', () =>
   db.close();
 });
 
+test('search_products on an empty catalog returns count 0 (empty-DB resilience, SPEC §8)', () => {
+  const db = openDatabase(':memory:'); // no products seeded
+  assert.deepEqual(searchProducts(db, { query: 'צבע' }), { results: [], count: 0 });
+  db.close();
+});
+
 test('search_products returns empty (not error) when nothing matches', () => {
   const db = fixtureDb();
   const res = searchProducts(db, { query: 'טלוויזיה פלזמה' });
